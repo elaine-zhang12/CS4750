@@ -52,7 +52,6 @@ END;
 GO
 
 -- procedure to return an item (if return date is later than return by date then update library account with overdue fees of $0.25 for each day late)
-
 CREATE PROCEDURE ReturnItem
     @CheckoutID INT,
     @ReturnDate DATE
@@ -131,15 +130,19 @@ END;
 GO
 
 
--- get total count of items by book and movie type (multiple group by)
+-- get total count of items by book and movie type
 CREATE FUNCTION dbo.GetTotalCountofItem
 ()
 RETURNS TABLE
 AS
 RETURN (
-    SELECT ItemType, COUNT(*) AS ItemCount
-    FROM LibraryItem
-    GROUP BY ItemType
+    SELECT 'Book' AS Item, BookType AS [Type], COUNT(*) AS ItemCount
+    FROM Books
+    GROUP BY BookType
+    UNION
+    SELECT 'Movie' AS Item, MovieType AS [Type], COUNT(*) AS ItemCount
+    FROM Movies
+    GROUP BY MovieType;
 );
 
 GO
@@ -186,7 +189,6 @@ CREATE VIEW ItemLocation AS
 GO
 
 -- 1 trigger
-
 CREATE TRIGGER trg_AfterReturn
 ON CheckOutLibraryItem
 AFTER UPDATE
@@ -248,12 +250,11 @@ ALTER TABLE LibraryAccount
 ADD EncryptedZipCode VARBINARY(128);
 
 -- -- 3 non-clustered indexes
-
 CREATE NONCLUSTERED INDEX IDX_LibraryAccount_OverdueFees
-ON LibraryAccount (OverdueFees);
+ON LibraryAccount (OverdueFees DESC);
 
 CREATE NONCLUSTERED INDEX IDX_LibraryItemState_CopiesAvailable
-ON LibraryItemState (CopiesAvailable);
+ON LibraryItemState (CopiesAvailable DESC);
 
-CREATE NONCLUSTERED INDEX IDX_CheckOutLibraryItem_CardID
-ON CheckOutLibraryItem (CardID);
+CREATE NONCLUSTERED INDEX IDX_Books_Title
+ON Books (Title ASC);

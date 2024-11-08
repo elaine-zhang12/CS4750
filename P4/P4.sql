@@ -53,6 +53,41 @@ GO
 
 -- procedure to return an item (if return date is later than return by date then update library account with overdue fees of $0.25 for each day late)
 
+CREATE PROCEDURE ReturnItem
+    @CheckoutID INT,
+    @ReturnDate DATE
+AS
+BEGIN
+    DECLARE @ReturnByDate DATE;
+    DECLARE @CardID INT;
+    DECLARE @ItemID INT;
+    DECLARE @DaysOverdue INT;
+    DECLARE @OverdueFee DECIMAL(10, 2);
+    DECLARE @FeePerDay DECIMAL(10, 2) = 0.25;  -- $0.25 per day overdue
+
+    SELECT @ReturnByDate = ReturnByDate, @CardID = CardID, @ItemID = ItemID
+    FROM CheckOutLibraryItem
+    WHERE CheckoutID = @CheckoutID;
+
+    SET @DaysOverdue = DATEDIFF(DAY, @ReturnByDate, @ReturnDate);
+
+    IF @DaysOverdue > 0
+    BEGIN
+        SET @OverdueFee = @DaysOverdue * @FeePerDay;
+
+        UPDATE LibraryAccount
+        SET OverdueFees = OverdueFees + @OverdueFee
+        WHERE CardID = @CardID;
+    END
+
+    UPDATE LibraryItemState
+    SET CopiesAvailable = CopiesAvailable + 1
+    WHERE ItemID = @ItemID;
+
+    INSERT INTO ReturnLibraryItem (CheckoutID, ReturnDate)
+    VALUES (@CheckoutID, @ReturnDate);
+END;
+GO
 
 -- get number of books written by an author
 CREATE FUNCTION dbo.GetTotalBooksWritten
@@ -213,3 +248,12 @@ ALTER TABLE LibraryAccount
 ADD EncryptedZipCode VARBINARY(128);
 
 -- -- 3 non-clustered indexes
+
+CREATE NONCLUSTERED INDEX IDX_LibraryAccount_OverdueFees
+ON LibraryAccount (OverdueFees);
+
+CREATE NONCLUSTERED INDEX IDX_LibraryItemState_CopiesAvailable
+ON LibraryItemState (CopiesAvailable);
+
+CREATE NONCLUSTERED INDEX IDX_CheckOutLibraryItem_CardID
+ON CheckOutLibraryItem (CardID);

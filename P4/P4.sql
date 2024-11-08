@@ -142,7 +142,7 @@ RETURN (
     UNION
     SELECT 'Movie' AS Item, MovieType AS [Type], COUNT(*) AS ItemCount
     FROM Movies
-    GROUP BY MovieType;
+    GROUP BY MovieType
 );
 
 GO
@@ -213,7 +213,6 @@ BEGIN
 
     WHILE @@FETCH_STATUS = 0
     BEGIN
-        -- Calculate days overdue
         SET @DaysOverdue = DATEDIFF(DAY, @ReturnByDate, GETDATE());
 
         -- Apply overdue fee only if item was returned after the ReturnByDate
@@ -221,7 +220,6 @@ BEGIN
         BEGIN
             SET @OverdueFee = @DaysOverdue * @FeePerDay;
 
-            -- Update the OverdueFees column in LibraryAccount
             UPDATE LibraryAccount
             SET OverdueFees = OverdueFees + @OverdueFee
             WHERE CardID = @CardID;

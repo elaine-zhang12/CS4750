@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, jsonify
+from flask import Flask, request, jsonify
 import mysql.connector
 from mysql.connector import Error
 from dotenv import load_dotenv

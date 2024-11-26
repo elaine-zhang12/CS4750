@@ -8,7 +8,7 @@ CREATE DATABASE Library;
 USE Library;
 
 CREATE TABLE LibraryAccount (
-    CardID INT PRIMARY KEY,
+    CardID INT AUTO_INCREMENT PRIMARY KEY,
     Name VARCHAR(30),
     NumChecked INT CHECK (NumChecked >= 0),
     NumReserved INT CHECK (NumReserved >= 0),
@@ -16,13 +16,13 @@ CREATE TABLE LibraryAccount (
 );
 
 CREATE TABLE Publishers (
-    PublisherID INT PRIMARY KEY,
+    PublisherID INT AUTO_INCREMENT PRIMARY KEY,
     Name VARCHAR(30),
     ContactInfo VARCHAR(30)
 );
 
 CREATE TABLE LibraryItem (
-    ItemID INT PRIMARY KEY,
+    ItemID INT AUTO_INCREMENT PRIMARY KEY,
     ItemType VARCHAR(10) CHECK (ItemType IN ('Book', 'Movie'))
 );
 
@@ -43,7 +43,7 @@ CREATE TABLE Books (
 );
 
 CREATE TABLE Authors (
-    AuthorID INT PRIMARY KEY,
+    AuthorID INT AUTO_INCREMENT PRIMARY KEY,
     Name VARCHAR(30),
     DOB VARCHAR(10),
     Nationality VARCHAR(100)
@@ -72,7 +72,7 @@ CREATE TABLE Movies (
 );
 
 CREATE TABLE Reviews (
-    ReviewID INT PRIMARY KEY,
+    ReviewID INT AUTO_INCREMENT PRIMARY KEY,
     CardID INT,
     ItemID INT,
     Comments VARCHAR(200),
@@ -82,7 +82,7 @@ CREATE TABLE Reviews (
 );
 
 CREATE TABLE Shelf (
-    ShelfID INT PRIMARY KEY,
+    ShelfID INT AUTO_INCREMENT PRIMARY KEY,
     Floor INT CHECK (Floor > 0 AND Floor < 4),
     Section CHAR CHECK (Section in ('A', 'B')),
     Aisle INT CHECK (Aisle > 0 AND Aisle < 6)

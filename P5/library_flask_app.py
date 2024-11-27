@@ -46,7 +46,7 @@ def get_account_by_person(card_id):
         cursor.execute("""
             SELECT * FROM LibraryAccount
             WHERE CardID = %s
-        """, (card_id))
+        """, (card_id,))
         
         account = cursor.fetchone()
         cursor.close()
@@ -79,7 +79,7 @@ def create_account():
         cursor.execute("""
             INSERT INTO LibraryAccount (Name, NumChecked, NumReserved, OverdueFees)
             VALUES (%s, 0, 0, 0)
-        """, (name))
+        """, (name,))
         connection.commit()
         cursor.close()
         connection.close()
@@ -101,8 +101,12 @@ def update_account_by_person(card_id):
     name = data.get('Name')
     fees = data.get('OverdueFees')
 
-    if not card_id or not name or not fees:
+    if not card_id or not name:
         return jsonify({"error": "Missing required fields"}), 400
+    
+    if not fees:
+        if fees != 0:
+            return jsonify({"error": "Missing required fields"}), 400
 
     connection = create_connection()
     if connection is None:
@@ -114,7 +118,7 @@ def update_account_by_person(card_id):
         cursor.execute("""
             SELECT Name FROM LibraryAccount
             WHERE CardID = %s
-        """, (card_id))
+        """, (card_id,))
 
         account = cursor.fetchone()
 
@@ -158,7 +162,7 @@ def delete_account_by_person(card_id):
         cursor.execute("""
             SELECT * FROM LibraryAccount
             WHERE CardID = %s
-        """, (card_id))
+        """, (card_id,))
 
         account = cursor.fetchone()
 
@@ -174,7 +178,7 @@ def delete_account_by_person(card_id):
         cursor.execute("""
             DELETE FROM LibraryAccount
             WHERE CardID = %s
-        """, (card_id))
+        """, (card_id,))
         connection.commit()
         cursor.close()
         connection.close()
@@ -200,7 +204,7 @@ def get_reviews_by_person(card_id):
         cursor.execute("""
             SELECT * FROM Reviews
             WHERE CardID = %s
-        """, (card_id))
+        """, (card_id,))
         
         reviews = cursor.fetchall()
         cursor.close()
@@ -364,7 +368,7 @@ def get_reservations_by_person(card_id):
         cursor.execute("""
             SELECT * FROM ReserveLibraryItem
             WHERE CardID = %s
-        """, (card_id))
+        """, (card_id,))
         
         reservations = cursor.fetchall()
         cursor.close()
@@ -420,7 +424,7 @@ def add_reservation():
             UPDATE LibraryAccount
             SET NumReserved = NumReserved + 1
             WHERE CardID = %s
-        """, (card_id))
+        """, (card_id,))
 
         connection.commit()
         cursor.close()

@@ -356,6 +356,7 @@ def delete_review_by_person(card_id):
 
 
 # enpoints for ReserveLibraryItem
+# GET: select all reservations from a person
 @app.route('/reservations/person/<int:card_id>', methods=['GET'])
 def get_reservations_by_person(card_id):
     connection = create_connection()
@@ -381,13 +382,12 @@ def get_reservations_by_person(card_id):
     except mysql.connector.Error as err:
         return jsonify({"error": str(err)}), 500
 
+# POST: insert a new reservation into the table
 # use this to test my post request in command line
 # Invoke-WebRequest -Uri "http://127.0.0.1:5000/reservations" -Method Post -Headers @{"Content-Type"="application/json"} -Body '{"ItemID": 30, "CardID": 7}'
 @app.route('/reservations', methods=['POST'])
 def add_reservation():
     data = request.get_json()
-
-    # Ensure required fields are provided
     item_id = data.get('ItemID')
     card_id = data.get('CardID')
 
@@ -437,6 +437,55 @@ def add_reservation():
     
     except mysql.connector.Error as err:
         return jsonify({"error": str(err)}), 500
+
+# PUT: change the number in line a person's reservation is
+@app.route('/reservations/<int:reservation_id>', methods=['PUT'])
+def update_reservation(reservation_id):
+    data = request.json
+    item_id = data.get('ItemID')
+    card_id = data.get('CardID')
+    place_in_line = data.get('PlaceInLine')
+
+    connection = create_connection()
+    if connection is None:
+        return jsonify({"error": "Failed to connect to the database"}), 500
+
+    try:
+        cursor = connection.cursor()
+        update_query = """
+        UPDATE ReserveLibraryItem
+        SET ItemID = %s, CardID = %s, PlaceInLine = %s
+        WHERE ReservationID = %s
+        """
+        cursor.execute(update_query, (item_id, card_id, place_in_line, reservation_id))
+        connection.commit()
+        cursor.close()
+        connection.close()
+        return jsonify({"message": "Reservation updated successfully"}), 200
+    except Error as e:
+        return jsonify({"error": str(e)}), 500
+    
+# DELETE: delete a reservation based on a person (use if a user deletes their library account)
+@app.route('/reservations/person/<int:card_id>', methods=['DELETE'])
+def delete_reservation(card_id):
+    connection = create_connection()
+    if connection is None:
+        return jsonify({"error": "Failed to connect to the database"}), 500
+    try:
+        cursor = connection.cursor()
+        delete_query = "DELETE FROM ReserveLibraryItem WHERE CardID = %s"
+        cursor.execute(delete_query, (card_id,))
+        connection.commit()
+        if cursor.rowcount > 0:
+            cursor.close()
+            connection.close()
+            return jsonify({"message": "Reservations deleted successfully"}), 200
+        else:
+            cursor.close()
+            connection.close()
+            return jsonify({"message": "Account not found"}), 404
+    except Error as e:
+        return jsonify({"error": str(e)}), 500
 
 
 # Run the app

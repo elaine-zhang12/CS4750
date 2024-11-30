@@ -181,7 +181,7 @@ def get_book_by_id(item_id):
     except mysql.connector.Error as err:
         return jsonify({"error": str(err)}), 500
 
-
+ 
 @app.route('/books', methods=['POST'])
 def add_book():
     data = request.get_json()

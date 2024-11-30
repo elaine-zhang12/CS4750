@@ -726,6 +726,9 @@ def update_reservation(reservation_id):
     card_id = data.get('CardID')
     place_in_line = data.get('PlaceInLine')
 
+    if not item_id or not card_id or not place_in_line:
+        return jsonify({"error": "Missing required fields"}), 400
+
     connection = create_connection()
     if connection is None:
         return jsonify({"error": "Failed to connect to the database"}), 500
@@ -745,25 +748,49 @@ def update_reservation(reservation_id):
     except Error as e:
         return jsonify({"error": str(e)}), 500
     
-# DELETE: delete a reservation based on a person (use if a user deletes their library account)
+# DELETE: delete a reservation based on a person
 @app.route('/reservations/person/<int:card_id>', methods=['DELETE'])
 def delete_reservation(card_id):
+    data = request.json
+    reservation_id = data.get('ReservationID')
+    card_id = data.get('CardID')
+
+    if not reservation_id or not card_id:
+        return jsonify({"error": "Missing required fields"}), 400
+
     connection = create_connection()
     if connection is None:
         return jsonify({"error": "Failed to connect to the database"}), 500
     try:
         cursor = connection.cursor()
-        delete_query = "DELETE FROM ReserveLibraryItem WHERE CardID = %s"
-        cursor.execute(delete_query, (card_id,))
+        cursor.execute("""
+            SELECT * FROM ReserveLibraryItem
+            WHERE ReservationID = %s
+        """, (reservation_id,))
+
+        reservation = cursor.fetchone()
+
+        if not reservation:
+            return jsonify({"message": f"No reservation found for ReservationID {reservation_id}"}), 404
+        if reservation[2] != card_id:
+            return jsonify({"message": f"Reservation {reservation_id} was not authored by CardID {card_id}, you cannot delete this reservation"}), 403
+        
+        delete_query = "DELETE FROM ReserveLibraryItem WHERE ReservationID = %s"
+        cursor.execute(delete_query, (reservation_id,))
+        cursor.execute("""
+            UPDATE LibraryAccount
+            SET NumReserved = NumReserved - 1
+            WHERE CardID = %s
+        """, (card_id,))
+        cursor.execute("""
+            UPDATE ReserveLibraryItem
+            SET PlaceInLine = PlaceInLine - 1
+            WHERE ItemID = %s AND PlaceInLine > %s
+        """, (reservation[1], reservation[3]))
         connection.commit()
-        if cursor.rowcount > 0:
-            cursor.close()
-            connection.close()
-            return jsonify({"message": "Reservations deleted successfully"}), 200
-        else:
-            cursor.close()
-            connection.close()
-            return jsonify({"message": "Account not found"}), 404
+        cursor.close()
+        connection.close()
+        return jsonify({"message": "Reservation deleted successfully"}), 200
     except Error as e:
         return jsonify({"error": str(e)}), 500
 

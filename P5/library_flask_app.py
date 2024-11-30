@@ -247,7 +247,6 @@ def return_checked_out_item(checkout_id):
 
 
 # endpoints for Books
-
 @app.route('/books/<int:item_id>', methods=['GET'])
 def get_book_by_id(item_id):
     connection = create_connection()
@@ -437,7 +436,7 @@ def delete_book(item_id):
         return jsonify({"error": str(err)}), 500
 
 
-# enpoints for LibraryAccounts
+# endpoints for LibraryAccounts
 @app.route('/accounts/person/<int:card_id>', methods=['GET'])
 def get_account_by_person(card_id):
     connection = create_connection()
@@ -500,7 +499,6 @@ def create_account():
 def update_account_by_person(card_id):
     data = request.get_json()
 
-    card_id = data.get('CardID')
     name = data.get('Name')
     fees = data.get('OverdueFees')
 
@@ -548,9 +546,6 @@ def update_account_by_person(card_id):
 
 @app.route('/accounts/person/<int:card_id>', methods=['DELETE'])
 def delete_account_by_person(card_id):
-    data = request.get_json()
-
-    card_id = data.get('CardID')
 
     if not card_id:
         return jsonify({"error": "Missing required fields"}), 400
@@ -871,7 +866,7 @@ def update_reservation(reservation_id):
     except Error as e:
         return jsonify({"error": str(e)}), 500
     
-# DELETE: delete a reservation based on a person
+# DELETE: delete a reservation based on a single reservation
 @app.route('/reservations/person/<int:card_id>', methods=['DELETE'])
 def delete_reservation(card_id):
     data = request.json

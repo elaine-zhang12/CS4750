@@ -28,10 +28,290 @@ def create_connection():
 
 # endpoints for CheckoutLibraryItem
 
+@app.route('/checkout/person/<int:card_id>', methods=['GET'])
+def get_checked_out_items_by_person(card_id):
+    connection = create_connection()
+    if connection is None:
+        return jsonify({"error": "Failed to connect to the database"}), 500
+
+    cursor = connection.cursor(dictionary=True)
+    try:
+        cursor.execute("""
+            SELECT * FROM CheckOutLibraryItem
+            WHERE CardID = %s
+        """, (card_id,))
+        
+        items = cursor.fetchall()
+        cursor.close()
+        connection.close()
+
+        if not items:
+            return jsonify({"message": f"No checked-out items found for CardID {card_id}"}), 404
+
+        return jsonify(items), 200
+    except mysql.connector.Error as err:
+        return jsonify({"error": str(err)}), 500
+
+
+@app.route('/checkout', methods=['POST'])
+def checkout_item():
+    data = request.get_json()
+
+    card_id = data.get('CardID')
+    item_id = data.get('ItemID')
+    borrow_date = data.get('BorrowDate')
+    return_by_date = data.get('ReturnByDate')
+
+    if not card_id or not item_id or not borrow_date or not return_by_date:
+        return jsonify({"error": "Missing required fields"}), 400
+
+    connection = create_connection()
+    if connection is None:
+        return jsonify({"error": "Failed to connect to the database"}), 500
+
+    cursor = connection.cursor()
+
+    try:
+        cursor.execute("""
+            SELECT CopiesAvailable FROM LibraryItemState
+            WHERE ItemID = %s
+        """, (item_id,))
+        item_state = cursor.fetchone()
+
+        if not item_state or item_state[0] <= 0:
+            return jsonify({"message": "Item is not available for checkout"}), 403
+
+        cursor.execute("""
+            INSERT INTO CheckOutLibraryItem (ItemID, CardID, BorrowDate, ReturnByDate)
+            VALUES (%s, %s, %s, %s)
+        """, (item_id, card_id, borrow_date, return_by_date))
+
+        cursor.execute("""
+            UPDATE LibraryItemState
+            SET CopiesAvailable = CopiesAvailable - 1
+            WHERE ItemID = %s
+        """, (item_id,))
+
+        cursor.execute("""
+            UPDATE LibraryAccount
+            SET NumChecked = NumChecked + 1
+            WHERE CardID = %s
+        """, (card_id,))
+
+        connection.commit()
+        cursor.close()
+        connection.close()
+
+        return jsonify({"message": "Item checked out successfully"}), 201
+    except mysql.connector.Error as err:
+        return jsonify({"error": str(err)}), 500
+
+
+@app.route('/checkout/<int:checkout_id>', methods=['DELETE'])
+def return_checked_out_item(checkout_id):
+    connection = create_connection()
+    if connection is None:
+        return jsonify({"error": "Failed to connect to the database"}), 500
+
+    cursor = connection.cursor()
+
+    try:
+
+        cursor.execute("""
+            SELECT ItemID, CardID FROM CheckOutLibraryItem
+            WHERE CheckoutID = %s
+        """, (checkout_id,))
+        checkout = cursor.fetchone()
+
+        if not checkout:
+            return jsonify({"message": "Checkout record not found"}), 404
+
+        item_id, card_id = checkout
+
+        cursor.execute("""
+            DELETE FROM CheckOutLibraryItem
+            WHERE CheckoutID = %s
+        """, (checkout_id,))
+
+        cursor.execute("""
+            UPDATE LibraryItemState
+            SET CopiesAvailable = CopiesAvailable + 1
+            WHERE ItemID = %s
+        """, (item_id,))
+
+        cursor.execute("""
+            UPDATE LibraryAccount
+            SET NumChecked = NumChecked - 1
+            WHERE CardID = %s
+        """, (card_id,))
+
+        connection.commit()
+        cursor.close()
+        connection.close()
+
+        return jsonify({"message": "Item returned successfully"}), 200
+    except mysql.connector.Error as err:
+        return jsonify({"error": str(err)}), 500
+
 
 
 # endpoints for Books
 
+@app.route('/books/<int:item_id>', methods=['GET'])
+def get_book_by_id(item_id):
+    connection = create_connection()
+    if connection is None:
+        return jsonify({"error": "Failed to connect to the database"}), 500
+
+    cursor = connection.cursor(dictionary=True)
+    try:
+        cursor.execute("""
+            SELECT * FROM Books
+            WHERE ItemID = %s
+        """, (item_id,))
+        
+        book = cursor.fetchone()
+        cursor.close()
+        connection.close()
+
+        if not book:
+            return jsonify({"message": f"No book found with ItemID {item_id}"}), 404
+
+        return jsonify(book), 200
+    except mysql.connector.Error as err:
+        return jsonify({"error": str(err)}), 500
+
+
+@app.route('/books', methods=['POST'])
+def add_book():
+    data = request.get_json()
+
+    item_id = data.get('ItemID')
+    language = data.get('Language')
+    genre = data.get('Genre')
+    title = data.get('Title')
+    publication_year = data.get('PublicationYear')
+    num_copies = data.get('NumCopies')
+    book_type = data.get('BookType')
+    publisher_id = data.get('PublisherID')
+
+    if not item_id or not language or not genre or not title or not publication_year or not num_copies or not book_type or not publisher_id:
+        return jsonify({"error": "Missing required fields"}), 400
+
+    connection = create_connection()
+    if connection is None:
+        return jsonify({"error": "Failed to connect to the database"}), 500
+
+    cursor = connection.cursor()
+
+    try:
+        cursor.execute("""
+            INSERT INTO LibraryItem (ItemID, ItemType)
+            VALUES (%s, 'Book')
+        """, (item_id,))
+
+        cursor.execute("""
+            INSERT INTO Books (ItemID, Language, Genre, Title, PublicationYear, NumCopies, BookType, PublisherID)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        """, (item_id, language, genre, title, publication_year, num_copies, book_type, publisher_id))
+
+        cursor.execute("""
+            INSERT INTO LibraryItemState (ItemID, CopiesAvailable, ReservationCount)
+            VALUES (%s, %s, 0)
+        """, (item_id, num_copies))
+
+        connection.commit()
+        cursor.close()
+        connection.close()
+
+        return jsonify({"message": "Book added successfully", "ItemID": item_id}), 201
+    except mysql.connector.Error as err:
+        return jsonify({"error": str(err)}), 500
+
+
+@app.route('/books/<int:item_id>', methods=['PUT'])
+def update_book(item_id):
+    data = request.get_json()
+
+    language = data.get('Language')
+    genre = data.get('Genre')
+    title = data.get('Title')
+    publication_year = data.get('PublicationYear')
+    num_copies = data.get('NumCopies')
+    book_type = data.get('BookType')
+    publisher_id = data.get('PublisherID')
+
+    if not language or not genre or not title or not publication_year or not num_copies or not book_type or not publisher_id:
+        return jsonify({"error": "Missing required fields"}), 400
+
+    connection = create_connection()
+    if connection is None:
+        return jsonify({"error": "Failed to connect to the database"}), 500
+
+    cursor = connection.cursor()
+
+    try:
+        cursor.execute("""
+            UPDATE Books
+            SET Language = %s, Genre = %s, Title = %s, PublicationYear = %s, NumCopies = %s, BookType = %s, PublisherID = %s
+            WHERE ItemID = %s
+        """, (language, genre, title, publication_year, num_copies, book_type, publisher_id, item_id))
+
+        cursor.execute("""
+            UPDATE LibraryItemState
+            SET CopiesAvailable = %s
+            WHERE ItemID = %s
+        """, (num_copies, item_id))
+
+        connection.commit()
+        cursor.close()
+        connection.close()
+
+        return jsonify({"message": "Book updated successfully", "ItemID": item_id}), 200
+    except mysql.connector.Error as err:
+        return jsonify({"error": str(err)}), 500
+
+
+@app.route('/books/<int:item_id>', methods=['DELETE'])
+def delete_book(item_id):
+    connection = create_connection()
+    if connection is None:
+        return jsonify({"error": "Failed to connect to the database"}), 500
+
+    cursor = connection.cursor()
+
+    try:
+        cursor.execute("""
+            SELECT * FROM Books
+            WHERE ItemID = %s
+        """, (item_id,))
+        book = cursor.fetchone()
+
+        if not book:
+            return jsonify({"message": f"No book found with ItemID {item_id}"}), 404
+
+        cursor.execute("""
+            DELETE FROM LibraryItemState
+            WHERE ItemID = %s
+        """, (item_id,))
+
+        cursor.execute("""
+            DELETE FROM Books
+            WHERE ItemID = %s
+        """, (item_id,))
+
+        cursor.execute("""
+            DELETE FROM LibraryItem
+            WHERE ItemID = %s
+        """, (item_id,))
+
+        connection.commit()
+        cursor.close()
+        connection.close()
+
+        return jsonify({"message": "Book deleted successfully", "ItemID": item_id}), 200
+    except mysql.connector.Error as err:
+        return jsonify({"error": str(err)}), 500
 
 
 # enpoints for LibraryAccounts

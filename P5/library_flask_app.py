@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify
 import mysql.connector
 from mysql.connector import Error
 from dotenv import load_dotenv
+from datetime import datetime
 import os
 
 # Create the Flask app
@@ -28,7 +29,7 @@ def create_connection():
 
 # endpoints for CheckoutLibraryItem
 
-@app.route('/checkout/person/<int:card_id>', methods=['GET'])
+@app.route('/checkouts/person/<int:card_id>', methods=['GET'])
 def get_checked_out_items_by_person(card_id):
     connection = create_connection()
     if connection is None:
@@ -53,7 +54,7 @@ def get_checked_out_items_by_person(card_id):
         return jsonify({"error": str(err)}), 500
 
 
-@app.route('/checkout', methods=['POST'])
+@app.route('/checkouts', methods=['POST'])
 def checkout_item():
     data = request.get_json()
 
@@ -73,13 +74,38 @@ def checkout_item():
 
     try:
         cursor.execute("""
-            SELECT CopiesAvailable FROM LibraryItemState
+            SELECT * FROM LibraryItemState
             WHERE ItemID = %s
         """, (item_id,))
         item_state = cursor.fetchone()
 
-        if not item_state or item_state[0] <= 0:
-            return jsonify({"message": "Item is not available for checkout"}), 403
+        if not item_state:
+            return jsonify({"message": "Item not found"}), 404
+        if item_state[1] <= item_state[2]:
+            cursor.execute("""
+                SELECT * FROM ReserveLibraryItem
+                WHERE ItemID = %s AND CardID = %s AND PlaceInLine > 0
+            """, (item_id, card_id))
+            reservation = cursor.fetchone()
+            if not reservation:
+                return jsonify({"message": "Item is not available for checkout, please place a reservation if you wish to obtain a copy"}), 403
+            if reservation[3] > item_state[1]:
+                return jsonify({"message": "Item is not available for checkout, please place a reservation if you wish to obtain a copy"}), 403
+            
+            cursor.execute("""
+                DELETE FROM ReserveLibraryItem
+                WHERE ReservationID = %s
+            """, (reservation[0],))
+            cursor.execute("""
+            UPDATE LibraryAccount
+            SET NumReserved = NumReserved - 1
+            WHERE CardID = %s
+            """, (card_id,))
+            cursor.execute("""
+            UPDATE ReserveLibraryItem
+            SET PlaceInLine = PlaceInLine - 1
+            WHERE ItemID = %s AND PlaceInLine > %s
+            """, (reservation[1], reservation[3]))
 
         cursor.execute("""
             INSERT INTO CheckOutLibraryItem (ItemID, CardID, BorrowDate, ReturnByDate)
@@ -107,8 +133,57 @@ def checkout_item():
         return jsonify({"error": str(err)}), 500
 
 
-@app.route('/checkout/<int:checkout_id>', methods=['DELETE'])
+@app.route('/checkouts/person/<int:card_id>', methods=['PUT'])
+def renew_item(card_id):
+    data = request.get_json()
+    checkout_id = data.get('CheckoutID')
+    card_id = data.get('CardID')
+    return_by_date = data.get('ReturnByDate')
+
+    if not checkout_id or not card_id or not return_by_date:
+        return jsonify({"error": "Missing required fields"}), 400
+
+    connection = create_connection()
+    if connection is None:
+        return jsonify({"error": "Failed to connect to the database"}), 500
+
+    cursor = connection.cursor()
+
+    try:
+        cursor.execute("""
+            SELECT * FROM CheckOutLibraryItem
+            WHERE CheckoutID = %s
+        """, (checkout_id,))
+        checkout = cursor.fetchone()
+        print(checkout[3])
+
+        if not checkout:
+            return jsonify({"message": f"Checkout with CheckoutID {checkout} not found"}), 404
+        if checkout[2] != card_id:
+            return jsonify({"message": f"Checkout {checkout_id} was not authored by CardID {card_id}, you cannot renew this checkout"}), 403
+
+        cursor.execute("""
+            UPDATE CheckOutLibraryItem
+            SET ReturnByDate = %s
+            WHERE CheckoutID = %s
+        """, (return_by_date, checkout_id))
+
+        connection.commit()
+        cursor.close()
+        connection.close()
+
+        return jsonify({"message": "Checkout renewed successfully"}), 201
+    except mysql.connector.Error as err:
+        return jsonify({"error": str(err)}), 500
+
+@app.route('/checkouts/<int:checkout_id>', methods=['DELETE'])
 def return_checked_out_item(checkout_id):
+    data = request.get_json()
+    return_date = data.get('ReturnDate')
+
+    if not checkout_id or not return_date:
+        return jsonify({"error": "Missing required fields"}), 400
+
     connection = create_connection()
     if connection is None:
         return jsonify({"error": "Failed to connect to the database"}), 500
@@ -118,32 +193,48 @@ def return_checked_out_item(checkout_id):
     try:
 
         cursor.execute("""
-            SELECT ItemID, CardID FROM CheckOutLibraryItem
+            SELECT * FROM CheckOutLibraryItem
             WHERE CheckoutID = %s
         """, (checkout_id,))
         checkout = cursor.fetchone()
 
         if not checkout:
-            return jsonify({"message": "Checkout record not found"}), 404
-
-        item_id, card_id = checkout
-
+            return jsonify({"message": f"Checkout record with CheckoutID {checkout_id} not found"}), 404
+        
         cursor.execute("""
-            DELETE FROM CheckOutLibraryItem
+            SELECT * FROM ReturnLibraryItem
             WHERE CheckoutID = %s
         """, (checkout_id,))
+        checkout_return = cursor.fetchone()
+
+        if checkout_return:
+            return jsonify({"message": f"Checkout {checkout_id} already returned"}), 403
+
+        cursor.execute("""
+            INSERT INTO ReturnLibraryItem (CheckoutID, ReturnDate)
+            VALUES (%s, %s)
+        """, (checkout_id, return_date))
 
         cursor.execute("""
             UPDATE LibraryItemState
             SET CopiesAvailable = CopiesAvailable + 1
             WHERE ItemID = %s
-        """, (item_id,))
+        """, (checkout[1],))
 
-        cursor.execute("""
-            UPDATE LibraryAccount
-            SET NumChecked = NumChecked - 1
-            WHERE CardID = %s
-        """, (card_id,))
+        returned_date = datetime.strptime(return_date, "%Y-%m-%d").date()
+
+        if returned_date > checkout[4]:
+            cursor.execute("""
+                UPDATE LibraryAccount
+                SET NumChecked = NumChecked - 1, OverdueFees = OverdueFees + DATEDIFF(%s, %s) * 0.25
+                WHERE CardID = %s
+            """, (returned_date, checkout[4], checkout[2],))
+        else:
+            cursor.execute("""
+                UPDATE LibraryAccount
+                SET NumChecked = NumChecked - 1
+                WHERE CardID = %s
+            """, (checkout[2],))
 
         connection.commit()
         cursor.close()
@@ -186,7 +277,6 @@ def get_book_by_id(item_id):
 def add_book():
     data = request.get_json()
 
-    item_id = data.get('ItemID')
     language = data.get('Language')
     genre = data.get('Genre')
     title = data.get('Title')
@@ -195,7 +285,7 @@ def add_book():
     book_type = data.get('BookType')
     publisher_id = data.get('PublisherID')
 
-    if not item_id or not language or not genre or not title or not publication_year or not num_copies or not book_type or not publisher_id:
+    if not language or not genre or not title or not publication_year or not num_copies or not book_type or not publisher_id:
         return jsonify({"error": "Missing required fields"}), 400
 
     connection = create_connection()
@@ -206,9 +296,11 @@ def add_book():
 
     try:
         cursor.execute("""
-            INSERT INTO LibraryItem (ItemID, ItemType)
-            VALUES (%s, 'Book')
-        """, (item_id,))
+            INSERT INTO LibraryItem (ItemType)
+            VALUES ('Book')
+        """)
+
+        item_id = cursor.lastrowid
 
         cursor.execute("""
             INSERT INTO Books (ItemID, Language, Genre, Title, PublicationYear, NumCopies, BookType, PublisherID)
@@ -252,6 +344,16 @@ def update_book(item_id):
 
     try:
         cursor.execute("""
+            SELECT Title FROM Books
+            WHERE ItemID = %s
+        """, (item_id,))
+
+        book = cursor.fetchone()
+
+        if not book:
+            return jsonify({"message": f"No book found with ItemID {item_id}"}), 404
+        
+        cursor.execute("""
             UPDATE Books
             SET Language = %s, Genre = %s, Title = %s, PublicationYear = %s, NumCopies = %s, BookType = %s, PublisherID = %s
             WHERE ItemID = %s
@@ -274,6 +376,9 @@ def update_book(item_id):
 
 @app.route('/books/<int:item_id>', methods=['DELETE'])
 def delete_book(item_id):
+    data = request.get_json()
+    current_date = data.get('CurrentDate')
+
     connection = create_connection()
     if connection is None:
         return jsonify({"error": "Failed to connect to the database"}), 500
@@ -290,6 +395,24 @@ def delete_book(item_id):
         if not book:
             return jsonify({"message": f"No book found with ItemID {item_id}"}), 404
 
+        cursor.execute("""
+            SELECT CheckoutID FROM CheckOutLibraryItem
+            WHERE ItemID = %s AND ReturnByDate > %s
+        """, (item_id, current_date))
+        item = cursor.fetchall()
+        if item:
+            for i in item:
+                id = i[0]
+                cursor.execute("""
+                    SELECT ReturnID FROM ReturnLibraryItem
+                    WHERE CheckoutID = %s
+                """, (id,))
+                missing = cursor.fetchone()
+                if not missing:
+                    return jsonify({"message": f"Book still has copies checked out, please make sure all copies have been returned before deleting item {item_id}"}), 403
+
+        
+        
         cursor.execute("""
             DELETE FROM LibraryItemState
             WHERE ItemID = %s

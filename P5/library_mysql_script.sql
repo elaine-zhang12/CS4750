@@ -39,7 +39,7 @@ CREATE TABLE Books (
     CONSTRAINT CHK_Genre CHECK (Genre IN ('JFIC', 'YFIC', 'Fiction', 'Biography', 'Mystery', 'Poetry', 'Thriller', 'Romance')),
     CONSTRAINT CHK_BookType CHECK (BookType IN ('AudioBook_Physical', 'Physical_Copy', 'AudioBook_Digital', 'Ebook')),
     FOREIGN KEY (PublisherID) REFERENCES Publishers(PublisherID),
-    FOREIGN KEY (ItemID) REFERENCES LibraryItem(ItemID)
+    FOREIGN KEY (ItemID) REFERENCES LibraryItem(ItemID) ON DELETE CASCADE
 );
 
 CREATE TABLE Authors (
@@ -53,7 +53,7 @@ CREATE TABLE Book_Author (
     ItemID INT,
     AuthorID INT,
     PRIMARY KEY (ItemID, AuthorID),
-    FOREIGN KEY (ItemID) REFERENCES Books(ItemID),
+    FOREIGN KEY (ItemID) REFERENCES Books(ItemID) ON DELETE CASCADE,
     FOREIGN KEY (AuthorID) REFERENCES Authors(AuthorID)
 );
 
@@ -68,7 +68,7 @@ CREATE TABLE Movies (
     MovieType VARCHAR(20) CHECK (MovieType IN ('Physical', 'Digital')),
     CONSTRAINT CHK_LanguageM CHECK (Language IN ('EN', 'ES', 'FR', 'KO', 'IT', 'CH')),
     CONSTRAINT CHK_GenreM CHECK (Genre IN ('Comedy', 'Biography', 'Mystery', 'Thriller', 'Romance', 'Documentary', 'Horror', 'Action', 'Sci-Fi', 'Adventure', 'Drama', 'Crime', 'Animation', 'History', 'Fantasy')),
-    FOREIGN KEY (ItemID) REFERENCES LibraryItem(ItemID)
+    FOREIGN KEY (ItemID) REFERENCES LibraryItem(ItemID) ON DELETE CASCADE
 );
 
 CREATE TABLE Reviews (
@@ -78,7 +78,7 @@ CREATE TABLE Reviews (
     Comments VARCHAR(200),
     Rating INT CHECK (Rating > 0 AND Rating < 6),
     FOREIGN KEY (CardID) REFERENCES LibraryAccount(CardID),
-    FOREIGN KEY (ItemID) REFERENCES LibraryItem(ItemID)
+    FOREIGN KEY (ItemID) REFERENCES LibraryItem(ItemID) ON DELETE CASCADE
 );
 
 CREATE TABLE Shelf (
@@ -92,7 +92,7 @@ CREATE TABLE Shelf_PhysicalCopy (
     ItemID INT,
     ShelfID INT,
     PRIMARY KEY (ItemID, ShelfID),
-    FOREIGN KEY (ItemID) REFERENCES LibraryItem(ItemID),
+    FOREIGN KEY (ItemID) REFERENCES LibraryItem(ItemID) ON DELETE CASCADE,
     FOREIGN KEY (ShelfID) REFERENCES Shelf(ShelfID)
 );
 
@@ -102,7 +102,7 @@ CREATE TABLE CheckOutLibraryItem (
     CardID INT,
     BorrowDate DATE,
     ReturnByDate DATE,
-    FOREIGN KEY (ItemID) REFERENCES LibraryItem(ItemID),
+    FOREIGN KEY (ItemID) REFERENCES LibraryItem(ItemID) ON DELETE CASCADE,
     FOREIGN KEY (CardID) REFERENCES LibraryAccount(CardID)
 );
 
@@ -110,7 +110,7 @@ CREATE TABLE ReturnLibraryItem (
     ReturnID INT AUTO_INCREMENT PRIMARY KEY,
     CheckoutID INT,
     ReturnDate DATE,
-    FOREIGN KEY (CheckoutID) REFERENCES CheckOutLibraryItem(CheckoutID)
+    FOREIGN KEY (CheckoutID) REFERENCES CheckOutLibraryItem(CheckoutID) ON DELETE CASCADE
 );
 
 CREATE TABLE ReserveLibraryItem (
@@ -118,7 +118,7 @@ CREATE TABLE ReserveLibraryItem (
     ItemID INT,
     CardID INT,
     PlaceInLine INT,
-    FOREIGN KEY (ItemID) REFERENCES LibraryItem(ItemID),
+    FOREIGN KEY (ItemID) REFERENCES LibraryItem(ItemID) ON DELETE CASCADE,
     FOREIGN KEY (CardID) REFERENCES LibraryAccount(CardID)
 );
 
@@ -126,7 +126,7 @@ CREATE TABLE LibraryItemState (
     ItemID INT PRIMARY KEY,
     CopiesAvailable INT,
     ReservationCount INT,
-    FOREIGN KEY (ItemID) REFERENCES LibraryItem(ItemID)
+    FOREIGN KEY (ItemID) REFERENCES LibraryItem(ItemID) ON DELETE CASCADE
 );
 
 INSERT INTO LibraryAccount VALUES

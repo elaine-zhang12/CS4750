@@ -28,7 +28,6 @@ def create_connection():
 # DEFINE API ENDPOINTS
 
 # endpoints for CheckoutLibraryItem
-
 @app.route('/checkouts/person/<int:card_id>', methods=['GET'])
 def get_checked_out_items_by_person(card_id):
     connection = create_connection()
@@ -57,7 +56,6 @@ def get_checked_out_items_by_person(card_id):
 @app.route('/checkouts', methods=['POST'])
 def checkout_item():
     data = request.get_json()
-
     card_id = data.get('CardID')
     item_id = data.get('ItemID')
     borrow_date = data.get('BorrowDate')
@@ -137,7 +135,6 @@ def checkout_item():
 def renew_item(card_id):
     data = request.get_json()
     checkout_id = data.get('CheckoutID')
-    card_id = data.get('CardID')
     return_by_date = data.get('ReturnByDate')
 
     if not checkout_id or not card_id or not return_by_date:
@@ -245,7 +242,6 @@ def return_checked_out_item(checkout_id):
         return jsonify({"error": str(err)}), 500
 
 
-
 # endpoints for Books
 @app.route('/books/<int:item_id>', methods=['GET'])
 def get_book_by_id(item_id):
@@ -275,7 +271,6 @@ def get_book_by_id(item_id):
 @app.route('/books', methods=['POST'])
 def add_book():
     data = request.get_json()
-
     language = data.get('Language')
     genre = data.get('Genre')
     title = data.get('Title')
@@ -323,7 +318,6 @@ def add_book():
 @app.route('/books/<int:item_id>', methods=['PUT'])
 def update_book(item_id):
     data = request.get_json()
-
     language = data.get('Language')
     genre = data.get('Genre')
     title = data.get('Title')
@@ -409,8 +403,6 @@ def delete_book(item_id):
                 missing = cursor.fetchone()
                 if not missing:
                     return jsonify({"message": f"Book still has copies checked out, please make sure all copies have been returned before deleting item {item_id}"}), 403
-
-        
         
         cursor.execute("""
             DELETE FROM LibraryItemState
@@ -465,7 +457,6 @@ def get_account_by_person(card_id):
 @app.route('/accounts', methods=['POST'])
 def create_account():
     data = request.get_json()
-
     name = data.get('Name')
 
     if not name:
@@ -498,7 +489,6 @@ def create_account():
 @app.route('/accounts/person/<int:card_id>', methods=['PUT'])
 def update_account_by_person(card_id):
     data = request.get_json()
-
     name = data.get('Name')
     fees = data.get('OverdueFees')
 
@@ -546,7 +536,6 @@ def update_account_by_person(card_id):
 
 @app.route('/accounts/person/<int:card_id>', methods=['DELETE'])
 def delete_account_by_person(card_id):
-
     if not card_id:
         return jsonify({"error": "Missing required fields"}), 400
 
@@ -619,7 +608,6 @@ def get_reviews_by_person(card_id):
 @app.route('/reviews', methods=['POST'])
 def add_review():
     data = request.get_json()
-
     card_id = data.get('CardID')
     item_id = data.get('ItemID')
     comments = data.get('Comments')
@@ -665,8 +653,6 @@ def add_review():
 @app.route('/reviews/person/<int:card_id>', methods=['PUT'])
 def update_review_by_person(card_id):
     data = request.get_json()
-
-    card_id = data.get('CardID')
     item_id = data.get('ItemID')
     comments = data.get('Comments')
     rating = data.get('Rating')
@@ -712,8 +698,6 @@ def update_review_by_person(card_id):
 @app.route('/reviews/person/<int:card_id>', methods=['DELETE'])
 def delete_review_by_person(card_id):
     data = request.get_json()
-
-    card_id = data.get('CardID')
     item_id = data.get('ItemID')
 
     if not card_id or not item_id:
@@ -780,6 +764,7 @@ def get_reservations_by_person(card_id):
     except mysql.connector.Error as err:
         return jsonify({"error": str(err)}), 500
 
+
 # POST: insert a new reservation into the table
 # use this to test my post request in command line
 # Invoke-WebRequest -Uri "http://127.0.0.1:5000/reservations" -Method Post -Headers @{"Content-Type"="application/json"} -Body '{"ItemID": 30, "CardID": 7}'
@@ -836,6 +821,7 @@ def add_reservation():
     except mysql.connector.Error as err:
         return jsonify({"error": str(err)}), 500
 
+
 # PUT: change the number in line a person's reservation is
 @app.route('/reservations/<int:reservation_id>', methods=['PUT'])
 def update_reservation(reservation_id):
@@ -866,12 +852,12 @@ def update_reservation(reservation_id):
     except Error as e:
         return jsonify({"error": str(e)}), 500
     
+
 # DELETE: delete a reservation based on a single reservation
 @app.route('/reservations/person/<int:card_id>', methods=['DELETE'])
 def delete_reservation(card_id):
     data = request.json
     reservation_id = data.get('ReservationID')
-    card_id = data.get('CardID')
 
     if not reservation_id or not card_id:
         return jsonify({"error": "Missing required fields"}), 400
